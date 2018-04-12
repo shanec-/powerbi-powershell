@@ -38,36 +38,36 @@
         .\Deploy-PowerBiReport.ps1 -authorityName "sndbx26.onmicrosoft.com" -username "admin@sndbx26.onmicrosoft.com" -password "P@ssw0rd!" -clientId "19da8650-b202-4bc9-95f3-e8daf38ec39e" -resourceGroupName "Sandbox Analytics" -reportFileName ".\SuperReport.pbix" -overwriteIfExists -createGroupIfMissing
 #>
 param(
-    [Parameter(Mandatory=$true)]
-	[string]$authorityName,
-	[Parameter(Mandatory=$true)]
-	[string]$username,
-	[Parameter(Mandatory=$true)]
-	[string]$password,
-	[Parameter(Mandatory=$true)]
+    [Parameter(Mandatory = $true)]
+    [string]$authorityName,
+    [Parameter(Mandatory = $true)]
+    [string]$username,
+    [Parameter(Mandatory = $true)]
+    [string]$password,
+    [Parameter(Mandatory = $true)]
     [guid]$clientId,
-    [Parameter(ParameterSetName="GroupNameReportFile",Mandatory=$true)]
-    [Parameter(ParameterSetName="GroupNameReportFolder",Mandatory=$true)]
+    [Parameter(ParameterSetName = "GroupNameReportFile", Mandatory = $true)]
+    [Parameter(ParameterSetName = "GroupNameReportFolder", Mandatory = $true)]
     [string]$groupName,
-    [Parameter(ParameterSetName="GroupIdReportFile", Mandatory=$true)]
-    [Parameter(ParameterSetName="GroupIdReportFolder", Mandatory=$true)]
+    [Parameter(ParameterSetName = "GroupIdReportFile", Mandatory = $true)]
+    [Parameter(ParameterSetName = "GroupIdReportFolder", Mandatory = $true)]
     [string]$groupId,
-    [Parameter(ParameterSetName="GroupNameReportFile",Mandatory=$true)]
-    [Parameter(ParameterSetName="GroupIdReportFile", Mandatory=$true)]
+    [Parameter(ParameterSetName = "GroupNameReportFile", Mandatory = $true)]
+    [Parameter(ParameterSetName = "GroupIdReportFile", Mandatory = $true)]
     [string]$reportFileName,
-    [Parameter(ParameterSetName="GroupIdReportFolder", Mandatory=$true)]
-    [Parameter(ParameterSetName="GroupNameReportFolder",Mandatory=$true)]
+    [Parameter(ParameterSetName = "GroupIdReportFolder", Mandatory = $true)]
+    [Parameter(ParameterSetName = "GroupNameReportFolder", Mandatory = $true)]
     [string]$reportFolder,
     [switch]$overwriteFileIfExists,
-    [Parameter(ParameterSetName="GroupNameReportFile",Mandatory=$false)]
-    [Parameter(ParameterSetName="GroupNameReportFolder",Mandatory=$false)]
+    [Parameter(ParameterSetName = "GroupNameReportFile", Mandatory = $false)]
+    [Parameter(ParameterSetName = "GroupNameReportFolder", Mandatory = $false)]
     [switch]$createGroupIfMissing
 )
 
-if (-Not (Get-Module -ListAvailable -Name  Microsoft.ADAL.PowerShell))
+if (-Not (Get-Module -ListAvailable -Name  Microsoft.ADAL.PowerShell)) 
 {
-  Write-Verbose "Initializing Microsoft.ADAL.PowerShell module ..."
-  Install-Module -Name  Microsoft.ADAL.PowerShell -Scope CurrentUser -ErrorAction SilentlyContinue -Force
+    Write-Verbose "Initializing Microsoft.ADAL.PowerShell module ..."
+    Install-Module -Name  Microsoft.ADAL.PowerShell -Scope CurrentUser -ErrorAction SilentlyContinue -Force
 }
 
 # Retrieve authentication token
@@ -77,20 +77,22 @@ $result = Get-ADALAccessToken -AuthorityName $authorityName `
     -UserName $username `
     -Password $password
 
-if(!$groupId)
+if (!$groupId) 
 {
     $groupInfo = (Invoke-RestMethod -Method Get -Uri "https://api.powerbi.com/v1.0/myorg/groups" -Headers @{ Authorization = "Bearer $result" }).value | Where-Object { $_.name -eq $groupName }
 
-    if(!$groupInfo)
+    if (!$groupInfo) 
     {
-        if($createGroupIfMissing)
+        if ($createGroupIfMissing) 
         {
             Write-Host "Group not found, attempting to create new: $groupName";
 
-            try {
+            try 
+            {
                 $newGroup = Invoke-RestMethod -Method Post -Uri "https://api.powerbi.com/v1.0/myorg/groups" -Headers @{ Authorization = "Bearer $result" } -Body "{ ""name"": ""$groupName"" }" -ContentType "application/json"
             }
-            catch {
+            catch 
+            {
                 throw "Error while attempting to create new group: $groupName";
             }
 
@@ -98,12 +100,12 @@ if(!$groupId)
 
             Write-host "Group $groupId successfully created.";
         }
-        else
+        else 
         {
             throw "Unable to find group name $groupName";
         }
     }
-    else
+    else 
     {
         $groupId = $groupInfo.id;
     }
@@ -111,41 +113,60 @@ if(!$groupId)
 
 Write-Verbose "Found GroupId: $groupId"
 
-$path = Resolve-Path $reportFileName
-$fileName = [IO.Path]::GetFileName($path)
-
-$filebody = [System.IO.File]::ReadAllBytes($path)
-$encoding = [System.Text.Encoding]::GetEncoding("iso-8859-1")
-$filebodytemplate = $encoding.GetString($filebody)
-
-$boundary = [guid]::NewGuid().ToString()
-[System.Text.StringBuilder]$contents = New-Object System.Text.StringBuilder
-$contents.AppendLine("--$boundary")
-$contents.AppendLine("Content-Disposition: form-data; name=""fileData""; filename=""$fileName""")
-$contents.AppendLine("Content-Type: application/octet-stream")
-$contents.AppendLine()
-$contents.AppendLine($filebodytemplate)
-$contents.AppendLine("--$boundary--")
-$body1 = $contents.ToString()
-
-$headers = @{ 
-    "Authorization" = "Bearer $result" 
-    "Content-Type" ="application/json"
+if ($reportFolder) 
+{
+    $files = Get-ChildItem -Path $reportFolder
+    foreach ($file in $files) 
+    {
+        Import-Report -rptFileName $file
+    }
+}
+else
+{
+    Import-Report -rptFileName $reportFileName
 }
 
-[string]$uri="https://api.powerbi.com/v1.0/myorg/groups/$groupId/imports?datasetDisplayName=$fileName";
+function Import-Report {
+    param(
+        [string]$rptFileName
+    )
+    $path = Resolve-Path $reportFileName
+    $fileName = [IO.Path]::GetFileName($path)
+    
+    $filebody = [System.IO.File]::ReadAllBytes($path)
+    $encoding = [System.Text.Encoding]::GetEncoding("iso-8859-1")
+    $filebodytemplate = $encoding.GetString($filebody)
+    
+    $boundary = [guid]::NewGuid().ToString()
+    [System.Text.StringBuilder]$contents = New-Object System.Text.StringBuilder
+    $contents.AppendLine("--$boundary")
+    $contents.AppendLine("Content-Disposition: form-data; name=""fileData""; filename=""$fileName""")
+    $contents.AppendLine("Content-Type: application/octet-stream")
+    $contents.AppendLine()
+    $contents.AppendLine($filebodytemplate)
+    $contents.AppendLine("--$boundary--")
+    $body1 = $contents.ToString()
+    
+    $headers = @{ 
+        "Authorization" = "Bearer $result" 
+        "Content-Type"  = "application/json"
+    }
+    
+    [string]$uri = "https://api.powerbi.com/v1.0/myorg/groups/$groupId/imports?datasetDisplayName=$fileName";
+    
+    if ($overwriteFileIfExists) {
+        $uri = $uri + "&nameConflict=Overwrite"
+    }
+    else {
+        $uri = $uri + "&nameConflict=Abort"
+    }
+    
+    Invoke-RestMethod `
+        -Method Post `
+        -Uri  $uri `
+        -Headers $headers `
+        -Body $body1 `
+        -ContentType "multipart/form-data; boundary=--$boundary" `
+        -Verbose
 
-if($overwriteFileIfExists){
-    $uri = $uri + "&nameConflict=Overwrite"
 }
-else {
-    $uri = $uri + "&nameConflict=Abort"
-}
-
-Invoke-RestMethod `
-    -Method Post `
-    -Uri  $uri `
-    -Headers $headers `
-    -Body $body1 `
-    -ContentType "multipart/form-data; boundary=--$boundary" `
-    -Verbose
