@@ -1,4 +1,4 @@
-function Get-Reports {
+function Get-Report {
     param(
         [string]$token,
         [string] $groupId
@@ -12,7 +12,7 @@ function Get-Reports {
     return $result;
 }
 
-function Import-Report {
+function Invoke-ReportDeploy {
     param(
         [string] $token,
         [string] $reportFilePath,
@@ -22,7 +22,7 @@ function Import-Report {
     
     if($overwriteFileIfExists)
     {        
-        $existingReports = Get-Reports -token $token -groupId $groupId
+        $existingReports = Get-Report -token $token -groupId $groupId
         $fileNameWithoutExtension = [IO.Path]::GetFileNameWithoutExtension($reportFilePath);
         $currentReportExists = $existingReports.value | Where-Object {$_.name -eq $fileNameWithoutExtension} | Select-Object Id
 
@@ -59,7 +59,7 @@ function Import-Report {
     }
     
     [string]$uri = "https://api.powerbi.com/v1.0/myorg/groups/$groupId/imports?datasetDisplayName=$fileName";
-    Write-Host $overwriteFile
+
     if ($overwriteFile) 
     {
         $uri = $uri + "&nameConflict=Overwrite"
@@ -78,7 +78,7 @@ function Import-Report {
         -Verbose
 }
 
-function Get-ServiceToken {
+function Get-ServiceAccessToken {
     param(
         [Parameter(Mandatory = $true)]
         [string]$authorityName,
@@ -138,7 +138,7 @@ function Get-ServiceToken {
         
         .\Deploy-PowerBiReport.ps1 -authorityName "sndbx26.onmicrosoft.com" -username "admin@sndbx26.onmicrosoft.com" -password "P@ssw0rd!" -clientId "19da8650-b202-4bc9-95f3-e8daf38ec39e" -resourceGroupName "Sandbox Analytics" -reportFileName ".\SuperReport.pbix" -overwriteIfExists -createGroupIfMissing
 #>
-function Deploy-PowerBiReport {
+function Import-Report {
     param(
         [Parameter(Mandatory = $true)]
         [string]$token,
@@ -174,7 +174,7 @@ function Deploy-PowerBiReport {
         {
             if ($createGroupIfMissing) 
             {
-                Write-Host "Group not found, attempting to create new: $groupName";
+                Write-Information "Group not found, attempting to create new: $groupName";
 
                 try 
                 {
@@ -187,7 +187,7 @@ function Deploy-PowerBiReport {
 
                 $groupId = $newGroup.id;
 
-                Write-host "Group $groupId successfully created.";
+                Write-Information "Group $groupId successfully created.";
             }
             else 
             {
@@ -207,14 +207,12 @@ function Deploy-PowerBiReport {
         $files = Get-ChildItem -Path $reportFolder\* -Include *.pbix, *.xlsx, *.xlxm, *.csv
         foreach ($file in $files) 
         {
-            Write-Host $overwriteFile
-            Import-Report -token $token -reportFilePath $file -groupId $groupId -overwriteFileIfExists:$overwriteFileIfExists
+            Invoke-ReportDeploy -token $token -reportFilePath $file -groupId $groupId -overwriteFileIfExists:$overwriteFileIfExists
         }
     }
     else
     {
-        Write-Host $overwriteFile
-        Import-Report -token $token -reportFilePath $reportFileName -groupId $groupId -overwriteFileIfExists:$overwriteFileIfExists
+        Invoke-ReportDeploy -token $token -reportFilePath $reportFileName -groupId $groupId -overwriteFileIfExists:$overwriteFileIfExists
     }
 }
 
