@@ -17,24 +17,8 @@ function Invoke-ReportDeploy {
         [string] $token,
         [string] $reportFilePath,
         [string] $groupId,
-        [switch] $overwriteFileIfExists
+        [switch] $overwriteReportIfExists
     )
-    
-    if($overwriteFileIfExists)
-    {        
-        $existingReports = Get-Report -token $token -groupId $groupId
-        $fileNameWithoutExtension = [IO.Path]::GetFileNameWithoutExtension($reportFilePath);
-        $currentReportExists = $existingReports.value | Where-Object {$_.name -eq $fileNameWithoutExtension} | Select-Object Id
-
-        if($currentReportExists)
-        {
-            $overwriteFile = $true;
-        }
-        else
-        {
-            $overwriteFile = $false;
-        }
-    }
 
     $path = Resolve-Path $reportFilePath
     $fileName = [IO.Path]::GetFileName($path)
@@ -60,15 +44,26 @@ function Invoke-ReportDeploy {
     
     [string]$uri = "https://api.powerbi.com/v1.0/myorg/groups/$groupId/imports?datasetDisplayName=$fileName";
 
-    if ($overwriteFile) 
-    {
-        $uri = $uri + "&nameConflict=Overwrite"
+    if($overwriteReportIfExists)
+    {        
+        $existingReports = Get-Report -token $token -groupId $groupId
+        $fileNameWithoutExtension = [IO.Path]::GetFileNameWithoutExtension($reportFilePath);
+        $currentReportExists = $existingReports.value | Where-Object {$_.name -eq $fileNameWithoutExtension} | Select-Object Id
+
+        if($currentReportExists)
+        {
+            $uri = $uri + "&nameConflict=Overwrite"
+        }
+        else
+        {
+            $uri = $uri + "&nameConflict=Abort"
+        }
     }
-    else 
+    else
     {
         $uri = $uri + "&nameConflict=Abort"
     }
-    
+
     Invoke-RestMethod `
         -Method Post `
         -Uri  $uri `
@@ -129,14 +124,14 @@ function Get-ServiceAccessToken {
     
     .PARAMETER reportFolder
 
-    .PARAMETER overwriteFile
+    .PARAMETER overwriteReportIfExists
 
     .PARAMETER createGroupIfMissing
 
     .EXAMPLE
-        .\Deploy-PowerBiReport.ps1 -authorityName "sndbx26.onmicrosoft.com" -username "admin@sndbx26.onmicrosoft.com" -password "P@ssw0rd!" -clientId "19da8650-b202-4bc9-95f3-e8daf38ec39e" -resourceGroupName "Sandbox Analytics" -reportFileName ".\SuperReport.pbix"
+        Import-Report.ps1 -authorityName "sndbx26.onmicrosoft.com" -username "admin@sndbx26.onmicrosoft.com" -password "P@ssw0rd!" -clientId "19da8650-b202-4bc9-95f3-e8daf38ec39e" -resourceGroupName "Sandbox Analytics" -reportFileName ".\SuperReport.pbix"
         
-        .\Deploy-PowerBiReport.ps1 -authorityName "sndbx26.onmicrosoft.com" -username "admin@sndbx26.onmicrosoft.com" -password "P@ssw0rd!" -clientId "19da8650-b202-4bc9-95f3-e8daf38ec39e" -resourceGroupName "Sandbox Analytics" -reportFileName ".\SuperReport.pbix" -overwriteIfExists -createGroupIfMissing
+        Import-Report.ps1 -authorityName "sndbx26.onmicrosoft.com" -username "admin@sndbx26.onmicrosoft.com" -password "P@ssw0rd!" -clientId "19da8650-b202-4bc9-95f3-e8daf38ec39e" -resourceGroupName "Sandbox Analytics" -reportFileName ".\SuperReport.pbix" -overwriteIfExists -createGroupIfMissing
 #>
 function Import-Report {
     param(
@@ -154,7 +149,7 @@ function Import-Report {
         [Parameter(ParameterSetName = "GroupIdReportFolder", Mandatory = $true)]
         [Parameter(ParameterSetName = "GroupNameReportFolder", Mandatory = $true)]
         [string]$reportFolder,
-        [switch]$overwriteFileIfExists,
+        [switch]$overwriteReportIfExists,
         [Parameter(ParameterSetName = "GroupNameReportFile", Mandatory = $false)]
         [Parameter(ParameterSetName = "GroupNameReportFolder", Mandatory = $false)]
         [switch]$createGroupIfMissing
@@ -207,12 +202,11 @@ function Import-Report {
         $files = Get-ChildItem -Path $reportFolder\* -Include *.pbix, *.xlsx, *.xlxm, *.csv
         foreach ($file in $files) 
         {
-            Invoke-ReportDeploy -token $token -reportFilePath $file -groupId $groupId -overwriteFileIfExists:$overwriteFileIfExists
+            Invoke-ReportDeploy -token $token -reportFilePath $file -groupId $groupId -overwriteReportIfExists:$overwriteReportIfExists
         }
     }
     else
     {
-        Invoke-ReportDeploy -token $token -reportFilePath $reportFileName -groupId $groupId -overwriteFileIfExists:$overwriteFileIfExists
+        Invoke-ReportDeploy -token $token -reportFilePath $reportFileName -groupId $groupId -overwriteReportIfExists:$overwriteReportIfExists
     }
 }
-
