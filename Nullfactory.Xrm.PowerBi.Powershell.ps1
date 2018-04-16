@@ -1,4 +1,4 @@
-Function Get-Report {
+Function Get-PowerBiReport {
     <#
     .SYNOPSIS
 		Retrieves a list of all reports in the PowerBI group.
@@ -13,7 +13,7 @@ Function Get-Report {
     .PARAMETER groupId
 		Mandatory parameter is the group idenfier for which the reports retreived.
     .EXAMPLE
-        Get-Report -token $token -groupId fcf96fa6-ee3f-4a7e-bd52-3d4c5c6c5e48
+        Get-PowerBiReport -token $token -groupId fcf96fa6-ee3f-4a7e-bd52-3d4c5c6c5e48
 
         Retrieve a list of reports for the specified group identifier.
     #>
@@ -32,12 +32,12 @@ Function Get-Report {
     return $result;
 }
 
-Function Invoke-ReportDeployment {
+Function Invoke-PowerBiReportDeployment {
     <#
     .SYNOPSIS
-		Deploys the report to the specified Power BI resource group.
+		Deploys the report to the specified Power BI app workspace group.
     .DESCRIPTION
-        Deploys the report to the specified Power BI resource group.
+        Deploys the report to the specified Power BI app workspace group.
 	.NOTES
 		Author: Shane Carvalho
 	.LINK
@@ -45,19 +45,19 @@ Function Invoke-ReportDeployment {
 	.PARAMETER token
         Mandatory parameter that specifies the ADAL access token.
     .PARAMETER groupId
-        Mandatory parameter is the group identifier into which the reports will be deployed.
+        Mandatory parameter is the app workspace group identifier into which the reports will be deployed.
 	.PARAMETER reportFilePath
 		Mandatory paramater that specifies the report file path of an individual report.
 	.PARAMETER overwriteReportIfExists
 		This optional switch tells the script if it should overwrite an existing report if one with the same name is found.
     .EXAMPLE
-        Invoke-ReportDeployment  -token $token -groupId  fcf96fa6-ee3f-4a7e-bd52-3d4c5c6c5e48 -reportFilePath c:\myreports\Test.pbix 
+        Invoke-PowerBiReportDeployment -token $token -groupId  fcf96fa6-ee3f-4a7e-bd52-3d4c5c6c5e48 -reportFilePath c:\myreports\Test.pbix 
 
-        Imports the report Test.pbix to resource group fcf96fa6-ee3f-4a7e-bd52-3d4c5c6c5e48
+        Imports the report Test.pbix to app workspace group fcf96fa6-ee3f-4a7e-bd52-3d4c5c6c5e48
     .EXAMPLE
-        Invoke-ReportDeployment  -token $token -groupId  fcf96fa6-ee3f-4a7e-bd52-3d4c5c6c5e48 -reportFilePath c:\myreports\Test.pbix -overwriteReportIfExists
+        Invoke-PowerBiReportDeployment -token $token -groupId  fcf96fa6-ee3f-4a7e-bd52-3d4c5c6c5e48 -reportFilePath c:\myreports\Test.pbix -overwriteReportIfExists
 
-        Imports the report Test.pbix to resource group fcf96fa6-ee3f-4a7e-bd52-3d4c5c6c5e48 and if a report exists with the same name, then overwrite it with the new one.
+        Imports the report Test.pbix to app workspace group fcf96fa6-ee3f-4a7e-bd52-3d4c5c6c5e48 and if a report exists with the same name, then overwrite it with the new one.
     #>
     param(
         [string] $token,
@@ -92,7 +92,7 @@ Function Invoke-ReportDeployment {
 
     if($overwriteReportIfExists)
     {        
-        $existingReports = Get-Report -token $token -groupId $groupId
+        $existingReports = Get-PowerBiReport -token $token -groupId $groupId
         $fileNameWithoutExtension = [IO.Path]::GetFileNameWithoutExtension($reportFilePath);
         $currentReportExists = $existingReports.value | Where-Object {$_.name -eq $fileNameWithoutExtension} | Select-Object Id
 
@@ -162,13 +162,81 @@ Function Get-PowerBiAccessToken {
     return $token;
 }
 
-
-Function Import-Report {
+Function Get-PowerBiAppWorkspaceGroupId {
     <#
     .SYNOPSIS
-		Deploy a Power BI report to a resource group.
+		Retrieve the PowerBi App Workspace Group Id
     .DESCRIPTION
-        Deploys a Power BI report to the specified resource group.
+        Retrieve the PowerBi App Workspace Group Id by Name
+	.NOTES
+		Author: Shane Carvalho
+	.LINK
+		https://nullfactory.net
+	.PARAMETER token
+		Mandatory parameter that specifies the ADAL access token.
+	.PARAMETER groupName
+        Mandatory paramater specifying the name of the app workspaces group.
+	.PARAMETER createGroupIfMissing
+		Switch indicating if a new group should be created if one does not exists
+    .EXAMPLE
+        Get-PowerBiAppWorkspaceGroupId -token $token -groupName "Sandbox Analytics" -
+
+        Retrieves the groupId of the app workspace group based on the name.
+    .EXAMPLE
+        Get-PowerBiAppWorkspaceGroupId -token $token -groupName "Sandbox Analytics" -createGroupIfMissing
+
+        Retrieves the app workspace group identifier of the report based on the report name. If it does not exists, a new one will be created.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$token,
+        [Parameter(Mandatory = $true)]
+        [string]$groupName,
+        [switch]$createGroupIfMissing
+    )
+
+    Write-Information "Attempting to retrieve group by name $groupName...";
+    $groupInfo = (Invoke-RestMethod -Method Get -Uri "https://api.powerbi.com/v1.0/myorg/groups" -Headers @{ Authorization = "Bearer $token" }).value | Where-Object { $_.name -eq $groupName }
+
+    if (!$groupInfo) 
+    {
+        if ($createGroupIfMissing) 
+        {
+            Write-Information "Group not found, attempting to create new: $groupName";
+
+            try 
+            {
+                $newGroup = Invoke-RestMethod -Method Post -Uri "https://api.powerbi.com/v1.0/myorg/groups" -Headers @{ Authorization = "Bearer $token" } -Body "{ ""name"": ""$groupName"" }" -ContentType "application/json"
+            }
+            catch 
+            {
+                throw "Error while attempting to create new group: $groupName";
+            }
+
+            $groupId = $newGroup.id;
+
+            Write-Information "Group $groupId successfully created.";
+        }
+        else 
+        {
+            throw "Unable to find group name $groupName";
+        }
+    }
+    else 
+    {
+        $groupId = $groupInfo.id;
+    }
+
+    return $groupId;
+}
+
+
+Function Import-PowerBiReport {
+    <#
+    .SYNOPSIS
+		Deploy a Power BI report to a app workspace group.
+    .DESCRIPTION
+        Deploys a Power BI report to the specified app workspace group.
 
         Pre-requisites:
         - PowerBi Pro account.
@@ -178,9 +246,9 @@ Function Import-Report {
 	.LINK
 		https://nullfactory.net
 	.PARAMETER groupName
-        The parameter specifying the resource group name into which the report would be deployed to. This parameter is ignored if groupId is provided.
+        The parameter specifying the app workspace group name into which the report would be deployed to. This parameter is ignored if groupId is provided.
     .PARAMETER groupId
-		The parameter specifying the resource group identifier into which the report would be deployed to.
+		The parameter specifying the app group identifier into which the report would be deployed to.
     .PARAMETER reportFileName
         This parameter specifies the single report that would be used to deploy. This parameter is ignored if a reportFolder parameter is provided.
     .PARAMETER reportFolder
@@ -190,22 +258,22 @@ Function Import-Report {
     .PARAMETER createGroupIfMissing
         This optional switch tells the script to create a new group with same name if one does not exists. This parameter is ignored if groupId is provided.
     .EXAMPLE
-        Import-Report.ps1 -token $token -groupName "Sandbox Analytics" -reportFolder ".\ReportFolder\" -createGroupIfMissing
+        Import-PowerBiReport -token $token -groupName "Sandbox Analytics" -reportFolder ".\ReportFolder\" -createGroupIfMissing
         
-        All reports in the .\ReportFolder reports folder is imported to the PowerBI resource group "Sandbox Analytics"
+        All reports in the .\ReportFolder reports folder is imported to the PowerBI app workspace group "Sandbox Analytics"
         If a group with the sepcified name does not exists, the script would create one for you. However, if a report with the same name exists, the operation would fail.
     .EXAMPLE
-        Import-Report.ps1 -token $token -groupName "Sandbox Analytics" -reportFileName ".\SuperReport.pbix" -overwriteReportIfExists
+        Import-PowerBiReport -token $token -groupName "Sandbox Analytics" -reportFileName ".\SuperReport.pbix" -overwriteReportIfExists
 
-        The SuperReport.pbix report is imported to the remote PowerBI resource group "Sandbox Analytics". If a report with the same exists in the resource group, it would be overwritten.
+        The SuperReport.pbix report is imported to the remote PowerBI app workspace group "Sandbox Analytics". If a report with the same exists in the app workspace group, it would be overwritten.
         However, if a group with the specified name does not exists, the operation would fail.
     .EXAMPLE
-        Import-Report.ps1 -groupId $token -groupId e0cbc83b-6629-43fd-9c69-25be3f6e3188 -reportFolder ".\ReportFolder\" -overwriteReportIfExists
+        Import-PowerBiReport -groupId $token -groupId e0cbc83b-6629-43fd-9c69-25be3f6e3188 -reportFolder ".\ReportFolder\" -overwriteReportIfExists
         
-        All reports in the .\ReportFolder reports folder is imported to the PowerBI resource group  e0cbc83b-6629-43fd-9c69-25be3f6e3188. 
-        If report with the same name exists in the same resource group, the script would replace it with the new report.
+        All reports in the .\ReportFolder reports folder is imported to the PowerBI app workspace group  e0cbc83b-6629-43fd-9c69-25be3f6e3188. 
+        If report with the same name exists in the same app workspace group, the script would replace it with the new report.
     .EXAMPLE
-        Import-Report.ps1 -groupId $token -groupId e0cbc83b-6629-43fd-9c69-25be3f6e3188 -reportFileName ".\SuperReport.pbix"
+        Import-PowerBiReport -groupId $token -groupId e0cbc83b-6629-43fd-9c69-25be3f6e3188 -reportFileName ".\SuperReport.pbix"
 
         The report SuperReport.pbix is imported to resoure group e0cbc83b-6629-43fd-9c69-25be3f6e3188.
     #>
@@ -238,37 +306,39 @@ Function Import-Report {
 
     if (!$groupId) 
     {
-        Write-Information "Attempting to retrieve group by name $groupName...";
-        $groupInfo = (Invoke-RestMethod -Method Get -Uri "https://api.powerbi.com/v1.0/myorg/groups" -Headers @{ Authorization = "Bearer $token" }).value | Where-Object { $_.name -eq $groupName }
+        # Write-Information "Attempting to retrieve group by name $groupName...";
+        # $groupInfo = (Invoke-RestMethod -Method Get -Uri "https://api.powerbi.com/v1.0/myorg/groups" -Headers @{ Authorization = "Bearer $token" }).value | Where-Object { $_.name -eq $groupName }
 
-        if (!$groupInfo) 
-        {
-            if ($createGroupIfMissing) 
-            {
-                Write-Information "Group not found, attempting to create new: $groupName";
+        # if (!$groupInfo) 
+        # {
+        #     if ($createGroupIfMissing) 
+        #     {
+        #         Write-Information "Group not found, attempting to create new: $groupName";
 
-                try 
-                {
-                    $newGroup = Invoke-RestMethod -Method Post -Uri "https://api.powerbi.com/v1.0/myorg/groups" -Headers @{ Authorization = "Bearer $token" } -Body "{ ""name"": ""$groupName"" }" -ContentType "application/json"
-                }
-                catch 
-                {
-                    throw "Error while attempting to create new group: $groupName";
-                }
+        #         try 
+        #         {
+        #             $newGroup = Invoke-RestMethod -Method Post -Uri "https://api.powerbi.com/v1.0/myorg/groups" -Headers @{ Authorization = "Bearer $token" } -Body "{ ""name"": ""$groupName"" }" -ContentType "application/json"
+        #         }
+        #         catch 
+        #         {
+        #             throw "Error while attempting to create new group: $groupName";
+        #         }
 
-                $groupId = $newGroup.id;
+        #         $groupId = $newGroup.id;
 
-                Write-Information "Group $groupId successfully created.";
-            }
-            else 
-            {
-                throw "Unable to find group name $groupName";
-            }
-        }
-        else 
-        {
-            $groupId = $groupInfo.id;
-        }
+        #         Write-Information "Group $groupId successfully created.";
+        #     }
+        #     else 
+        #     {
+        #         throw "Unable to find group name $groupName";
+        #     }
+        # }
+        # else 
+        # {
+        #     $groupId = $groupInfo.id;
+        # }
+
+        $groupId = Get-PowerBiAppWorkspaceGroupId -token $token -groupName $groupName -createGroupIfMissing:$createGroupIfMissing
     }
 
     Write-Verbose "Using GroupId: $groupId"
@@ -278,11 +348,11 @@ Function Import-Report {
         $files = Get-ChildItem -Path $reportFolder\* -Include *.pbix, *.xlsx, *.xlxm, *.csv
         foreach ($file in $files) 
         {
-            Invoke-ReportDeployment -token $token -groupId $groupId -reportFilePath $file -overwriteReportIfExists:$overwriteReportIfExists
+            Invoke-PowerBiReportDeployment -token $token -groupId $groupId -reportFilePath $file -overwriteReportIfExists:$overwriteReportIfExists
         }
     }
     else
     {
-        Invoke-ReportDeployment -token $token -groupId $groupId -reportFilePath $reportFileName -overwriteReportIfExists:$overwriteReportIfExists
+        Invoke-PowerBiReportDeployment -token $token -groupId $groupId -reportFilePath $reportFileName -overwriteReportIfExists:$overwriteReportIfExists
     }
 }
