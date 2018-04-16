@@ -1,7 +1,27 @@
-function Get-Report {
+Function Get-Report {
+    <#
+    .SYNOPSIS
+		Retrieves a list of all reports in the PowerBI group.
+    .DESCRIPTION
+        Retrieves a list of all reports in the PowerBI group.
+	.NOTES
+		Author: Shane Carvalho
+	.LINK
+		https://nullfactory.net
+	.PARAMETER token
+        Mandatory parameter that specifies the ADAL access token.
+    .PARAMETER groupId
+		Mandatory parameter is the group idenfier for which the reports retreived.
+    .EXAMPLE
+        Get-Report -token $token -groupId fcf96fa6-ee3f-4a7e-bd52-3d4c5c6c5e48
+
+        Retrieve a list of reports for the specified group identifier.
+    #>
     param(
+        [Parameter(Mandatory = $true)]
         [string]$token,
-        [string] $groupId
+        [Parameter(Mandatory = $true)]
+        [guid] $groupId
     )
    $result =  Invoke-RestMethod `
         -Method Get `
@@ -12,11 +32,37 @@ function Get-Report {
     return $result;
 }
 
-function Invoke-ReportDeploy {
+Function Invoke-ReportDeployment {
+    <#
+    .SYNOPSIS
+		Deploys the report to the specified Power BI resource group.
+    .DESCRIPTION
+        Deploys the report to the specified Power BI resource group.
+	.NOTES
+		Author: Shane Carvalho
+	.LINK
+		https://nullfactory.net
+	.PARAMETER token
+        Mandatory parameter that specifies the ADAL access token.
+    .PARAMETER groupId
+        Mandatory parameter is the group identifier into which the reports will be deployed.
+	.PARAMETER reportFilePath
+		Mandatory paramater that specifies the report file path of an individual report.
+	.PARAMETER overwriteReportIfExists
+		This optional switch tells the script if it should overwrite an existing report if one with the same name is found.
+    .EXAMPLE
+        Invoke-ReportDeployment  -token $token -groupId  fcf96fa6-ee3f-4a7e-bd52-3d4c5c6c5e48 -reportFilePath c:\myreports\Test.pbix 
+
+        Imports the report Test.pbix to resource group fcf96fa6-ee3f-4a7e-bd52-3d4c5c6c5e48
+    .EXAMPLE
+        Invoke-ReportDeployment  -token $token -groupId  fcf96fa6-ee3f-4a7e-bd52-3d4c5c6c5e48 -reportFilePath c:\myreports\Test.pbix -overwriteReportIfExists
+
+        Imports the report Test.pbix to resource group fcf96fa6-ee3f-4a7e-bd52-3d4c5c6c5e48 and if a report exists with the same name, then overwrite it with the new one.
+    #>
     param(
         [string] $token,
+        [guid] $groupId,
         [string] $reportFilePath,
-        [string] $groupId,
         [switch] $overwriteReportIfExists
     )
 
@@ -73,37 +119,12 @@ function Invoke-ReportDeploy {
         -Verbose
 }
 
-function Get-ServiceAccessToken {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$authorityName,
-        [Parameter(Mandatory = $true)]
-        [string]$username,
-        [Parameter(Mandatory = $true)]
-        [string]$password,
-        [Parameter(Mandatory = $true)]
-        [guid]$clientId
-    )
-
-    $token = Get-ADALAccessToken -AuthorityName $authorityName `
-        -ClientId $clientId `
-        -ResourceId "https://analysis.windows.net/powerbi/api" `
-        -UserName $username `
-        -Password $password
-
-    return $token
-}
-
-<#
+Function Get-PowerBiAccessToken {
+    <#
     .SYNOPSIS
-		Deploy a Power BI report to a resource group.
+		Retrieve Acccess Token used to access the Power BI Service.
     .DESCRIPTION
-        This scripts uploads a pbix file into the PowerBi Service.
-
-    Pre-requisites:
-      - PowerBi Pro account.
-      - Microsoft.ADAL.PowerShell 1.12
-
+        Retrieve Acccess Token used to access the Power BI Service.
 	.NOTES
 		Author: Shane Carvalho
 	.LINK
@@ -116,24 +137,78 @@ function Get-ServiceAccessToken {
 		Mandatory paramerter is the password of the user used to connect to the service.
 	.PARAMETER clientId
 		Required parameter. The client id used to connect to the service.
-	.PARAMETER groupName
-        The parameter specifying the resource group name.
-    .PARAMETER groupId
-		The parameter specifying the resource group Id.
-    .PARAMETER reportFileName
-    
-    .PARAMETER reportFolder
-
-    .PARAMETER overwriteReportIfExists
-
-    .PARAMETER createGroupIfMissing
-
     .EXAMPLE
-        Import-Report.ps1 -authorityName "sndbx26.onmicrosoft.com" -username "admin@sndbx26.onmicrosoft.com" -password "P@ssw0rd!" -clientId "19da8650-b202-4bc9-95f3-e8daf38ec39e" -resourceGroupName "Sandbox Analytics" -reportFileName ".\SuperReport.pbix"
+        Get-PowerBiAccessToken -authorityName "sndbx26.onmicrosoft.com" -username "admin@sndbx26.onmicrosoft.com" -password "P@ssw0rd!" -clientId "19da8650-b202-4bc9-95f3-e8daf38ec39e" 
+
+        Retrieve the Adal Access Token for the client application.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$authorityName,
+        [Parameter(Mandatory = $true)]
+        [string]$username,
+        [Parameter(Mandatory = $true)]
+        [string]$password,
+        [Parameter(Mandatory = $true)]
+        [string]$clientId
+    )
+
+    $token = Get-ADALAccessToken -AuthorityName $authorityName `
+        -ClientId $clientId `
+        -ResourceId "https://analysis.windows.net/powerbi/api" `
+        -UserName $username `
+        -Password $password
+
+    return $token;
+}
+
+
+Function Import-Report {
+    <#
+    .SYNOPSIS
+		Deploy a Power BI report to a resource group.
+    .DESCRIPTION
+        Deploys a Power BI report to the specified resource group.
+
+        Pre-requisites:
+        - PowerBi Pro account.
+        - Microsoft.ADAL.PowerShell 1.12
+	.NOTES
+		Author: Shane Carvalho
+	.LINK
+		https://nullfactory.net
+	.PARAMETER groupName
+        The parameter specifying the resource group name into which the report would be deployed to. This parameter is ignored if groupId is provided.
+    .PARAMETER groupId
+		The parameter specifying the resource group identifier into which the report would be deployed to.
+    .PARAMETER reportFileName
+        This parameter specifies the single report that would be used to deploy. This parameter is ignored if a reportFolder parameter is provided.
+    .PARAMETER reportFolder
+        This parameter specifies the folder which contains the reports that should be uploaded. The script would look for the following types of files: *.pbix, *.xlsx, *.xlxm, *.csv
+    .PARAMETER overwriteReportIfExists
+        This optional switch tells the script if it should overwrite an existing report if one with the same name is found.
+    .PARAMETER createGroupIfMissing
+        This optional switch tells the script to create a new group with same name if one does not exists. This parameter is ignored if groupId is provided.
+    .EXAMPLE
+        Import-Report.ps1 -token $token -groupName "Sandbox Analytics" -reportFolder ".\ReportFolder\" -createGroupIfMissing
         
-        Import-Report.ps1 -authorityName "sndbx26.onmicrosoft.com" -username "admin@sndbx26.onmicrosoft.com" -password "P@ssw0rd!" -clientId "19da8650-b202-4bc9-95f3-e8daf38ec39e" -resourceGroupName "Sandbox Analytics" -reportFileName ".\SuperReport.pbix" -overwriteIfExists -createGroupIfMissing
-#>
-function Import-Report {
+        All reports in the .\ReportFolder reports folder is imported to the PowerBI resource group "Sandbox Analytics"
+        If a group with the sepcified name does not exists, the script would create one for you. However, if a report with the same name exists, the operation would fail.
+    .EXAMPLE
+        Import-Report.ps1 -token $token -groupName "Sandbox Analytics" -reportFileName ".\SuperReport.pbix" -overwriteReportIfExists
+
+        The SuperReport.pbix report is imported to the remote PowerBI resource group "Sandbox Analytics". If a report with the same exists in the resource group, it would be overwritten.
+        However, if a group with the specified name does not exists, the operation would fail.
+    .EXAMPLE
+        Import-Report.ps1 -groupId $token -groupId e0cbc83b-6629-43fd-9c69-25be3f6e3188 -reportFolder ".\ReportFolder\" -overwriteReportIfExists
+        
+        All reports in the .\ReportFolder reports folder is imported to the PowerBI resource group  e0cbc83b-6629-43fd-9c69-25be3f6e3188. 
+        If report with the same name exists in the same resource group, the script would replace it with the new report.
+    .EXAMPLE
+        Import-Report.ps1 -groupId $token -groupId e0cbc83b-6629-43fd-9c69-25be3f6e3188 -reportFileName ".\SuperReport.pbix"
+
+        The report SuperReport.pbix is imported to resoure group e0cbc83b-6629-43fd-9c69-25be3f6e3188.
+    #>
     param(
         [Parameter(Mandatory = $true)]
         [string]$token,
@@ -142,16 +217,16 @@ function Import-Report {
         [string]$groupName,
         [Parameter(ParameterSetName = "GroupIdReportFile", Mandatory = $true)]
         [Parameter(ParameterSetName = "GroupIdReportFolder", Mandatory = $true)]
-        [string]$groupId,
-        [Parameter(ParameterSetName = "GroupNameReportFile", Mandatory = $true)]
+        [guid]$groupId,
         [Parameter(ParameterSetName = "GroupIdReportFile", Mandatory = $true)]
+        [Parameter(ParameterSetName = "GroupNameReportFile", Mandatory = $true)]
         [string]$reportFileName,
         [Parameter(ParameterSetName = "GroupIdReportFolder", Mandatory = $true)]
         [Parameter(ParameterSetName = "GroupNameReportFolder", Mandatory = $true)]
         [string]$reportFolder,
+        [Parameter(Mandatory = $false)]
         [switch]$overwriteReportIfExists,
-        [Parameter(ParameterSetName = "GroupNameReportFile", Mandatory = $false)]
-        [Parameter(ParameterSetName = "GroupNameReportFolder", Mandatory = $false)]
+        [Parameter(Mandatory = $false)]
         [switch]$createGroupIfMissing
     )
 
@@ -163,6 +238,7 @@ function Import-Report {
 
     if (!$groupId) 
     {
+        Write-Information "Attempting to retrieve group by name $groupName...";
         $groupInfo = (Invoke-RestMethod -Method Get -Uri "https://api.powerbi.com/v1.0/myorg/groups" -Headers @{ Authorization = "Bearer $token" }).value | Where-Object { $_.name -eq $groupName }
 
         if (!$groupInfo) 
@@ -195,18 +271,18 @@ function Import-Report {
         }
     }
 
-    Write-Verbose "Found GroupId: $groupId"
+    Write-Verbose "Using GroupId: $groupId"
 
     if ($reportFolder) 
     {
         $files = Get-ChildItem -Path $reportFolder\* -Include *.pbix, *.xlsx, *.xlxm, *.csv
         foreach ($file in $files) 
         {
-            Invoke-ReportDeploy -token $token -reportFilePath $file -groupId $groupId -overwriteReportIfExists:$overwriteReportIfExists
+            Invoke-ReportDeployment -token $token -groupId $groupId -reportFilePath $file -overwriteReportIfExists:$overwriteReportIfExists
         }
     }
     else
     {
-        Invoke-ReportDeploy -token $token -reportFilePath $reportFileName -groupId $groupId -overwriteReportIfExists:$overwriteReportIfExists
+        Invoke-ReportDeployment -token $token -groupId $groupId -reportFilePath $reportFileName -overwriteReportIfExists:$overwriteReportIfExists
     }
 }
