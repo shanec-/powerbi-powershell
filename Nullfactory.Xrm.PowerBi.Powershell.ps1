@@ -23,7 +23,7 @@ Function Get-PowerBiReport {
         [Parameter(Mandatory = $true)]
         [guid] $groupId
     )
-   $result =  Invoke-RestMethod `
+    $result = Invoke-RestMethod `
         -Method Get `
         -Uri  "https://api.powerbi.com/v1.0/myorg/groups/$groupId/reports" `
         -Headers @{ Authorization = "Bearer $token" } `
@@ -90,23 +90,19 @@ Function Invoke-PowerBiReportDeployment {
     
     [string]$uri = "https://api.powerbi.com/v1.0/myorg/groups/$groupId/imports?datasetDisplayName=$fileName";
 
-    if($overwriteReportIfExists)
-    {        
+    if ($overwriteReportIfExists) {        
         $existingReports = Get-PowerBiReport -token $token -groupId $groupId
         $fileNameWithoutExtension = [IO.Path]::GetFileNameWithoutExtension($reportFilePath);
         $currentReportExists = $existingReports.value | Where-Object {$_.name -eq $fileNameWithoutExtension} | Select-Object Id
 
-        if($currentReportExists)
-        {
+        if ($currentReportExists) {
             $uri = $uri + "&nameConflict=Overwrite"
         }
-        else
-        {
+        else {
             $uri = $uri + "&nameConflict=Abort"
         }
     }
-    else
-    {
+    else {
         $uri = $uri + "&nameConflict=Abort"
     }
 
@@ -198,18 +194,14 @@ Function Get-PowerBiAppWorkspaceGroupId {
     Write-Information "Attempting to retrieve group by name $groupName...";
     $groupInfo = (Invoke-RestMethod -Method Get -Uri "https://api.powerbi.com/v1.0/myorg/groups" -Headers @{ Authorization = "Bearer $token" }).value | Where-Object { $_.name -eq $groupName }
 
-    if (!$groupInfo) 
-    {
-        if ($createGroupIfMissing) 
-        {
+    if (!$groupInfo) {
+        if ($createGroupIfMissing) {
             Write-Information "Group not found, attempting to create new: $groupName";
 
-            try 
-            {
+            try {
                 $newGroup = Invoke-RestMethod -Method Post -Uri "https://api.powerbi.com/v1.0/myorg/groups" -Headers @{ Authorization = "Bearer $token" } -Body "{ ""name"": ""$groupName"" }" -ContentType "application/json"
             }
-            catch 
-            {
+            catch {
                 throw "Error while attempting to create new group: $groupName";
             }
 
@@ -217,13 +209,11 @@ Function Get-PowerBiAppWorkspaceGroupId {
 
             Write-Information "Group $groupId successfully created.";
         }
-        else 
-        {
+        else {
             throw "Unable to find group name $groupName";
         }
     }
-    else 
-    {
+    else {
         $groupId = $groupInfo.id;
     }
 
@@ -298,61 +288,25 @@ Function Import-PowerBiReport {
         [switch]$createGroupIfMissing
     )
 
-    if (-Not (Get-Module -ListAvailable -Name  Microsoft.ADAL.PowerShell)) 
-    {
+    if (-Not (Get-Module -ListAvailable -Name  Microsoft.ADAL.PowerShell)) {
         Write-Verbose "Initializing Microsoft.ADAL.PowerShell module ..."
         Install-Module -Name  Microsoft.ADAL.PowerShell -Scope CurrentUser -ErrorAction SilentlyContinue -Force
     }
 
-    if (!$groupId) 
-    {
-        # Write-Information "Attempting to retrieve group by name $groupName...";
-        # $groupInfo = (Invoke-RestMethod -Method Get -Uri "https://api.powerbi.com/v1.0/myorg/groups" -Headers @{ Authorization = "Bearer $token" }).value | Where-Object { $_.name -eq $groupName }
-
-        # if (!$groupInfo) 
-        # {
-        #     if ($createGroupIfMissing) 
-        #     {
-        #         Write-Information "Group not found, attempting to create new: $groupName";
-
-        #         try 
-        #         {
-        #             $newGroup = Invoke-RestMethod -Method Post -Uri "https://api.powerbi.com/v1.0/myorg/groups" -Headers @{ Authorization = "Bearer $token" } -Body "{ ""name"": ""$groupName"" }" -ContentType "application/json"
-        #         }
-        #         catch 
-        #         {
-        #             throw "Error while attempting to create new group: $groupName";
-        #         }
-
-        #         $groupId = $newGroup.id;
-
-        #         Write-Information "Group $groupId successfully created.";
-        #     }
-        #     else 
-        #     {
-        #         throw "Unable to find group name $groupName";
-        #     }
-        # }
-        # else 
-        # {
-        #     $groupId = $groupInfo.id;
-        # }
-
+    if (!$groupId) {
         $groupId = Get-PowerBiAppWorkspaceGroupId -token $token -groupName $groupName -createGroupIfMissing:$createGroupIfMissing
     }
 
     Write-Verbose "Using GroupId: $groupId"
 
-    if ($reportFolder) 
-    {
+    if ($reportFolder) {
         $files = Get-ChildItem -Path $reportFolder\* -Include *.pbix, *.xlsx, *.xlxm, *.csv
-        foreach ($file in $files) 
-        {
+        foreach ($file in $files) {
             Invoke-PowerBiReportDeployment -token $token -groupId $groupId -reportFilePath $file -overwriteReportIfExists:$overwriteReportIfExists
         }
     }
-    else
-    {
+    else {
         Invoke-PowerBiReportDeployment -token $token -groupId $groupId -reportFilePath $reportFileName -overwriteReportIfExists:$overwriteReportIfExists
     }
 }
+
