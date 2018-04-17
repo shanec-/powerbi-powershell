@@ -1,7 +1,7 @@
 Function Get-PowerBiReport {
-    <#
+  <#
     .SYNOPSIS
-		Retrieves a list of all reports in the PowerBI group.
+        Retrieves a list of all reports in the PowerBI group.
     .DESCRIPTION
         Retrieves a list of all reports in the PowerBI group.
 	.NOTES
@@ -11,7 +11,7 @@ Function Get-PowerBiReport {
 	.PARAMETER token
         Mandatory parameter that specifies the ADAL access token.
     .PARAMETER groupId
-		Mandatory parameter is the group idenfier for which the reports retreived.
+        Mandatory parameter is the group idenfier for which the reports retreived.
     .EXAMPLE
         Get-PowerBiReport -token $token -groupId fcf96fa6-ee3f-4a7e-bd52-3d4c5c6c5e48
 
@@ -51,7 +51,7 @@ Function Invoke-PowerBiReportDeployment {
 	.PARAMETER overwriteReportIfExists
 		This optional switch tells the script if it should overwrite an existing report if one with the same name is found.
     .EXAMPLE
-        Invoke-PowerBiReportDeployment -token $token -groupId  fcf96fa6-ee3f-4a7e-bd52-3d4c5c6c5e48 -reportFilePath c:\myreports\Test.pbix 
+        Invoke-PowerBiReportDeployment -token $token -groupId  fcf96fa6-ee3f-4a7e-bd52-3d4c5c6c5e48 -reportFilePath c:\myreports\Test.pbix
 
         Imports the report Test.pbix to app workspace group fcf96fa6-ee3f-4a7e-bd52-3d4c5c6c5e48
     .EXAMPLE
@@ -68,11 +68,11 @@ Function Invoke-PowerBiReportDeployment {
 
     $path = Resolve-Path $reportFilePath
     $fileName = [IO.Path]::GetFileName($path)
-    
+
     $filebody = [System.IO.File]::ReadAllBytes($path)
     $encoding = [System.Text.Encoding]::GetEncoding("iso-8859-1")
     $filebodytemplate = $encoding.GetString($filebody)
-    
+
     $boundary = [guid]::NewGuid().ToString()
     [System.Text.StringBuilder]$contents = New-Object System.Text.StringBuilder
     $contents.AppendLine("--$boundary")
@@ -82,15 +82,15 @@ Function Invoke-PowerBiReportDeployment {
     $contents.AppendLine($filebodytemplate)
     $contents.AppendLine("--$boundary--")
     $body1 = $contents.ToString()
-    
-    $headers = @{ 
-        "Authorization" = "Bearer $token" 
+
+    $headers = @{
+        "Authorization" = "Bearer $token"
         "Content-Type"  = "application/json"
     }
-    
+
     [string]$uri = "https://api.powerbi.com/v1.0/myorg/groups/$groupId/imports?datasetDisplayName=$fileName";
 
-    if ($overwriteReportIfExists) {        
+    if ($overwriteReportIfExists) {
         $existingReports = Get-PowerBiReport -token $token -groupId $groupId
         $fileNameWithoutExtension = [IO.Path]::GetFileNameWithoutExtension($reportFilePath);
         $currentReportExists = $existingReports.value | Where-Object {$_.name -eq $fileNameWithoutExtension} | Select-Object Id
@@ -134,7 +134,7 @@ Function Get-PowerBiAccessToken {
 	.PARAMETER clientId
 		Required parameter. The client id used to connect to the service.
     .EXAMPLE
-        Get-PowerBiAccessToken -authorityName "sndbx26.onmicrosoft.com" -username "admin@sndbx26.onmicrosoft.com" -password "P@ssw0rd!" -clientId "19da8650-b202-4bc9-95f3-e8daf38ec39e" 
+        Get-PowerBiAccessToken -authorityName "sndbx26.onmicrosoft.com" -username "admin@sndbx26.onmicrosoft.com" -password "P@ssw0rd!" -clientId "19da8650-b202-4bc9-95f3-e8daf38ec39e"
 
         Retrieve the Adal Access Token for the client application.
     #>
@@ -249,7 +249,7 @@ Function Import-PowerBiReport {
         This optional switch tells the script to create a new group with same name if one does not exists. This parameter is ignored if groupId is provided.
     .EXAMPLE
         Import-PowerBiReport -token $token -groupName "Sandbox Analytics" -reportFolder ".\ReportFolder\" -createGroupIfMissing
-        
+
         All reports in the .\ReportFolder reports folder is imported to the PowerBI app workspace group "Sandbox Analytics"
         If a group with the sepcified name does not exists, the script would create one for you. However, if a report with the same name exists, the operation would fail.
     .EXAMPLE
@@ -259,8 +259,8 @@ Function Import-PowerBiReport {
         However, if a group with the specified name does not exists, the operation would fail.
     .EXAMPLE
         Import-PowerBiReport -groupId $token -groupId e0cbc83b-6629-43fd-9c69-25be3f6e3188 -reportFolder ".\ReportFolder\" -overwriteReportIfExists
-        
-        All reports in the .\ReportFolder reports folder is imported to the PowerBI app workspace group  e0cbc83b-6629-43fd-9c69-25be3f6e3188. 
+
+        All reports in the .\ReportFolder reports folder is imported to the PowerBI app workspace group  e0cbc83b-6629-43fd-9c69-25be3f6e3188.
         If report with the same name exists in the same app workspace group, the script would replace it with the new report.
     .EXAMPLE
         Import-PowerBiReport -groupId $token -groupId e0cbc83b-6629-43fd-9c69-25be3f6e3188 -reportFileName ".\SuperReport.pbix"
